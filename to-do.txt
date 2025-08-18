@@ -1,0 +1,18 @@
+To-Do
+
+1. ILP-Based Row Placer
+Inputs: Primitive cells: GDS files, netlists
+        JSON files (connectivity, primitives, placement constraints)
+Task:
+        Develop an Integer Linear Programming (ILP)–based row placement algorithm to:
+        Place primitives within predefined rows 
+        Generate placed layout GDS files
+        Optimize area utilization
+        Minimize total wire length
+
+
+2. Once the placer code is done we go for the routing code
+Tasks:
+        Coordinate with Ramprasath on the router
+        Use Hanan router
+ 
