@@ -7,7 +7,9 @@ int main(int argc, char* argv[]) {
 
     // Example: initialize data
     CircuitData circuit;
-    circuit.loadFromFile("testcases/example.cir");
+    circuit.dummyData();
+    //print absolute address example.cir in system out
+   
 
     // Run placer
     ILPPlace placer(circuit);
