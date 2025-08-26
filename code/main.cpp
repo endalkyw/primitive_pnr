@@ -2,19 +2,17 @@
 #include "datatype.h"
 #include "ILPPlace.h"
 
-int main(int argc, char* argv[]) {
-    std::cout << "Analog ILP Placer started..." << std::endl;
+int main() {
+  std::cout << "[ILP] Analog ILP Placer started...\n";
 
-    // Example: initialize data
-    CircuitData circuit;
-    circuit.dummyData();
-    //print absolute address example.cir in system out
-   
+  // 1) 准备数据（仅 dummy）
+  CircuitData circuit;
+  circuit.dummyData();
 
-    // Run placer
-    ILPPlace placer(circuit);
-    placer.run();
+  // 2) 构造 placer 并运行（所有 setting 在 ILPPlace 内部完成）
+  ILPPlace placer(circuit);
+  placer.run();
 
-    std::cout << "Placement finished." << std::endl;
-    return 0;
+  std::cout << "[ILP] Placement finished.\n";
+  return 0;
 }
