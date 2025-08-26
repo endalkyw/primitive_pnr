@@ -1,76 +1,179 @@
 #include "datatype.h"
-#include <fstream>
+#include <cassert>
 #include <iostream>
 
-void CircuitData::loadFromFile(const std::string& filename) {
-    // TODO: simple parser for testcases
-    std::cout << "Loading circuit from " << filename << " ..." << std::endl;
-
-    // Example dummy data
-    primitives.push_back({"M1", 2, 1, 0, 0});
-    primitives.push_back({"M2", 3, 1, 0, 0});
+// ---- 索引 ----
+void CircuitData::buildPrimitiveIndex() {
+    primitive_by_name.clear();
+    for (auto& m : primitives) {
+        primitive_by_name[m.name] = &m;
+        m.pin_index_by_name.clear();
+        for (size_t i = 0; i < m.pins.size(); ++i)
+            m.pin_index_by_name[m.pins[i].name] = i;
+    }
 }
 
-void CircuitData::dummyData(){
-    layoutSize = {5, 5}; // 5x5 layout
-    // create 9 primitives in a
-    // 3x3 grid
-    primitives.push_back({"M1", 0, 0, 1, 1});
-    primitives.push_back({"M2", 1, 0, 1, 1});
-    primitives.push_back({"M3", 2, 0, 1, 1});
-    primitives.push_back({"M4", 0, 1, 1, 1  });
-    primitives.push_back({"M5", 1, 1, 1, 1  });
-    primitives.push_back({"M6", 2, 1, 1, 1  });  
-    primitives.push_back({"M7", 0, 2, 1, 1  });
-    primitives.push_back({"M8", 1, 2, 1, 1  });
-    primitives.push_back({"M9", 2, 2, 1, 1  });
-    // for each primitive, add 4 pins at the center of each side
-    for(auto& prim : primitives){
-        prim.pins.push_back({"P1", {prim.shape.width/2, 0}, &prim}); // bottom
-        prim.pins.push_back({"P2", {prim.shape.width, prim.shape.height/2}, &prim}); // right
-        prim.pins.push_back({"P3", {prim.shape.width/2, prim.shape.height}, &prim}); // top
-        prim.pins.push_back({"P4", {0, prim.shape.height/2}, &prim}); // left
+void CircuitData::buildTerminalTemplateIndex() {
+    term_tpl_by_name.clear();
+    for (auto& t : term_templates) {
+        term_tpl_by_name[t.name] = &t;
+        t.pin_index_by_name.clear();
+        for (size_t i = 0; i < t.pins.size(); ++i)
+            t.pin_index_by_name[t.pins[i].name] = i;
     }
-    //相邻的primitive之间连线，形成一个网表，每个primitive的右侧pin和下侧pin分别和相邻primitive的左侧pin和上侧pin相连
-    for(size_t i = 0; i < primitives.size(); ++i){  
-        size_t row = i / 3;
-        size_t col = i % 3;
-        // right pin to left pin of right primitive
-        if(col < 2){
-            Net net;
-            net.name = "N" + std::to_string(nets.size()+1);
-            net.pins.push_back(&primitives[i].pins[1]); // right pin of current primitive
-            net.pins.push_back(&primitives[i+1].pins[3]); // left pin of right primitive
-            nets.push_back(net);
+}
+
+// ---- Block ----
+Point Block::pinAbsXY(size_t i) const {
+    const auto& off = pins[i].tmpl->offset;
+    return { position.x + off.x, position.y + off.y };
+}
+Point Block::pinAbsXY(const std::string& pinName) const {
+    auto it = master->pin_index_by_name.find(pinName);
+    assert(it != master->pin_index_by_name.end());
+    return pinAbsXY(it->second);
+}
+
+// ---- Terminal ----
+Point Terminal::pinAbsXY(size_t i) const {
+    const auto& off = pins[i].tmpl->offset;
+    return { position.x + off.x, position.y + off.y };
+}
+Point Terminal::pinAbsXY(const std::string& pinName) const {
+    auto it = tmpl->pin_index_by_name.find(pinName);
+    assert(it != tmpl->pin_index_by_name.end());
+    return pinAbsXY(it->second);
+}
+
+// ---- 实例化 ----
+Block* CircuitData::addBlock(const std::string& instName,
+                             const std::string& masterName,
+                             Point pos) {
+    auto it = primitive_by_name.find(masterName);
+    if (it == primitive_by_name.end()) {
+        std::cerr << "[addBlock] master not found: " << masterName << "\n";
+        return nullptr;
+    }
+    const Primitive* M = it->second;
+
+    blocks.emplace_back();
+    Block& b = blocks.back();
+    b.name = instName;
+    b.master = M;
+    b.position = pos;
+    b.pins.resize(M->pins.size());
+    for (size_t i = 0; i < M->pins.size(); ++i) {
+        b.pins[i].tmpl   = &M->pins[i];
+        b.pins[i].parent = &b;
+    }
+    return &b;
+}
+
+Terminal* CircuitData::addTerminal(const std::string& instName,
+                                   const std::string& tplName,
+                                   Point pos,
+                                   FixMode fixOverride,
+                                   int slideMin, int slideMax) {
+    auto it = term_tpl_by_name.find(tplName);
+    if (it == term_tpl_by_name.end()) {
+        std::cerr << "[addTerminal] template not found: " << tplName << "\n";
+        return nullptr;
+    }
+    const TerminalTemplate* T = it->second;
+
+    terminals.emplace_back();
+    Terminal& t = terminals.back();
+    t.name = instName;
+    t.tmpl = T;
+    t.position = pos;
+    t.fix = fixOverride;
+    t.edge = T->edge;
+    t.slide_min = (slideMin || slideMax) ? slideMin : T->default_slide_min;
+    t.slide_max = (slideMin || slideMax) ? slideMax : T->default_slide_max;
+
+    t.pins.resize(T->pins.size());
+    for (size_t i = 0; i < T->pins.size(); ++i) {
+        t.pins[i].tmpl   = &T->pins[i];
+        t.pins[i].parent = nullptr; // Terminal 没有 Block parent
+    }
+    return &t;
+}
+
+// ---- I/O ----
+void CircuitData::loadFromFile(const std::string& filename) {
+    std::cout << "Loading circuit from " << filename << " ...\n";
+    // TODO: parse netlist
+}
+
+// ---- Dummy Data: 单一 primitive + VDD/GND terminal ----
+void CircuitData::dummyData() {
+    primitives.clear(); blocks.clear(); nets.clear();
+    terminals.clear(); term_templates.clear();
+    primitive_by_name.clear(); term_tpl_by_name.clear();
+
+    // 1) 定义唯一 primitive
+    Primitive cell;
+    cell.name = "PRIM_X1";
+    cell.shape = {1,1};
+    cell.pins  = {
+        {"P_LEFT",{0,0}},
+        {"P_RIGHT",{1,0}},
+        {"P_TOP",{0,1}},
+        {"P_BOTTOM",{0,0}}
+    };
+    primitives.push_back(cell);
+    buildPrimitiveIndex();
+
+    // 2) 定义 terminal templates: VDD / GND
+    TerminalTemplate vdd, gnd;
+    vdd.name = "VDD_TOP"; vdd.edge = Edge::Top;
+    vdd.shape = {1,1};
+    vdd.pins  = { {"PAD",{0,0}} };
+    vdd.default_fix = FixMode::FixedXY;
+
+    gnd.name = "GND_BOTTOM"; gnd.edge = Edge::Bottom;
+    gnd.shape = {1,1};
+    gnd.pins  = { {"PAD",{0,0}} };
+    gnd.default_fix = FixMode::FixedXY;
+
+    term_templates.push_back(vdd);
+    term_templates.push_back(gnd);
+    buildTerminalTemplateIndex();
+
+    // 3) 实例化 3×3 block grid
+    const int ROWS=3, COLS=3;
+    for (int r=0;r<ROWS;r++){
+        for (int c=0;c<COLS;c++){
+            std::string inst="U"+std::to_string(r*COLS+c+1);
+            addBlock(inst,"PRIM_X1",{c,r});
         }
-        // bottom pin to top pin of bottom primitive
-        if(row < 2){
-            Net net;
-            net.name = "N" + std::to_string(nets.size()+1);
-            net.pins.push_back(&primitives[i].pins[0]); // bottom pin of current primitive
-            net.pins.push_back(&primitives[i+3].pins[2]); // top pin of bottom primitive
-            nets.push_back(net);
-        }
-    }
-    //在layout 上下各加一个terminal，上面的terminal连接第一行的primitive，下面的terminal连接最后一行的primitive
-    for(size_t col = 0; col < 3; ++col){
-        Pin topTerminal = {"T_top_" + std::to_string(col+1), {col, 3}, nullptr};
-        terminals.push_back(&topTerminal);
-        Net netTop;
-        netTop.name = "N" + std::to_string(nets.size()+1);
-        netTop.pins.push_back(&topTerminal);
-        netTop.pins.push_back(&primitives[col].pins[2]); // top pin of first row primitive
-        nets.push_back(netTop);
-
-        Pin bottomTerminal = {"T_bottom_" + std::to_string(col+1), {col, -1}, nullptr};
-        terminals.push_back(&bottomTerminal);
-        Net netBottom;
-        netBottom.name = "N" + std::to_string(nets.size()+1);
-        netBottom.pins.push_back(&bottomTerminal);
-        netBottom.pins.push_back(&primitives[6 + col].pins[0]); // bottom pin of last row primitive
-        nets.push_back(netBottom);
     }
 
+    // 4) 实例化 VDD/GND terminals
+    auto* T_VDD = addTerminal("T_VDD","VDD_TOP",{COLS/2,ROWS},FixMode::FixedXY);
+    auto* T_GND = addTerminal("T_GND","GND_BOTTOM",{COLS/2,-1},FixMode::FixedXY);
 
+    // 5) 构造简单网表：比如第一行所有 block 的 TOP -> VDD
+    for (int c=0;c<COLS;c++){
+        Block& b=blocks[c]; // 第0行
+        Net net;
+        net.name="N_VDD_"+b.name;
+        net.pins.push_back(&T_VDD->pins[0]);
+        net.pins.push_back(&b.pins[2]); // P_TOP
+        nets.push_back(net);
+    }
+    // 最后一行所有 block 的 BOTTOM -> GND
+    for (int c=0;c<COLS;c++){
+        Block& b=blocks[(ROWS-1)*COLS+c];
+        Net net;
+        net.name="N_GND_"+b.name;
+        net.pins.push_back(&T_GND->pins[0]);
+        net.pins.push_back(&b.pins[3]); // P_BOTTOM
+        nets.push_back(net);
+    }
 
+    std::cout << "DummyData: masters="<<primitives.size()
+              << " blocks="<<blocks.size()
+              << " terms="<<terminals.size()
+              << " nets="<<nets.size()<<"\n";
 }
