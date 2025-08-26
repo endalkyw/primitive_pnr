@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <cmath>
 #include <cassert>
+#include <iostream>
+
 
 // ---------- 通用 ----------
 struct Point { int x{0}, y{0}; };

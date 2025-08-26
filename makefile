@@ -1,8 +1,18 @@
 # ====== Config ======
-CXX ?= g++
+CXX = g++
 CXXFLAGS ?= -std=gnu++17 -O2 -Wall -Wextra -Wpedantic -Icode
 LDFLAGS ?=
 LDLIBS ?=
+CXXFLAGS += -I$(CONDA_PREFIX)/include
+CXXFLAGS += -I$(CONDA_PREFIX)/include/highs    # ← 新增这一行
+CXXFLAGS += -D_ISOC11_SOURCE=1
+CXXFLAGS += -D_GLIBCXX_USE_TIMESPEC_GET=0 -D_GLIBCXX_HAVE_TIMESPEC_GET=0
+
+LDFLAGS  += -L$(CONDA_PREFIX)/lib -Wl,-rpath,$(CONDA_PREFIX)/lib
+LDLIBS   += -lhighs
+
+# 可选：避免运行时找不到 .so（否则需要 export LD_LIBRARY_PATH）
+LDFLAGS  += -Wl,-rpath,$(CONDA_PREFIX)/lib
 
 # Debug: make DEBUG=1
 ifeq ($(DEBUG),1)
