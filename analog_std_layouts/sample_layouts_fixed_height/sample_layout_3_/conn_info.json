@@ -1,0 +1,70 @@
+{
+    "gnd": {
+        "pins": [
+            "ncm1_s",
+            "ncm2_s",
+            "ndp_b"
+        ],
+        "type": "IO"
+    },
+    "vdd": {
+        "pins": [
+            "pcm1_s",
+            "pcm2_s"
+        ],
+        "type": "IO"
+    },
+    "net1": {
+        "pins": [
+            "ndp_d0",
+            "pcm1_d0"
+        ],
+        "type": "net"
+    },
+    "net2": {
+        "pins": [
+            "ndp_d1",
+            "pcm2_d0"
+        ],
+        "type": "net"
+    },
+    "vout": {
+        "pins": [
+            "pcm2_d1",
+            "ncm2_d1"
+        ],
+        "type": "O"
+    },
+    "net4": {
+        "pins": [
+            "pcm1_d1",
+            "ncm2_d0"
+        ],
+        "type": "net"
+    },
+    "is": {
+        "pins": [
+            "ncm1_d0"
+        ],
+        "type": "I"
+    },
+    "net3": {
+        "pins": [
+            "ncm1_d1",
+            "ndp_s"
+        ],
+        "type": "net"
+    },
+    "vin_m": {
+        "pins": [
+            "ndp_g0"
+        ],
+        "type": "O"
+    },
+    "vin_p": {
+        "pins": [
+            "ndp_g1"
+        ],
+        "type": "O"
+    }
+}
